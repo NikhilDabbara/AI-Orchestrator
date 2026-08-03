@@ -28,3 +28,4 @@ chroma_data/
 .env
 
 Database/Database.sql
+main.py
