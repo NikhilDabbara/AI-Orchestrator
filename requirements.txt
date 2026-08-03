@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+mysql-connector-python
+chromadb
+sentence-transformers
+groq
+google-genai
+requests
+python-dotenv
+pydantic

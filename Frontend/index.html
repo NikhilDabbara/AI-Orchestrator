@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Orchestrator</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: {
+          accent: {
+            DEFAULT: '#8ab4f8',
+          }
+        }
+      }
+    }
+  }
+</script>
+<style>
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.35); border-radius: 8px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(128,128,128,0.55); }
+
+  textarea { field-sizing: content; }
+
+  .modal-backdrop {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  .sidebar-transition {
+    transition: width 0.2s ease-in-out;
+  }
+
+  .fade-item {
+    transition: opacity 0.15s ease-in-out, max-width 0.15s ease-in-out;
+  }
+
+  @keyframes bounce-dot {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+    40% { transform: scale(1); opacity: 1; }
+  }
+  .typing-dot {
+    animation: bounce-dot 1.4s infinite ease-in-out both;
+  }
+  .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+  .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+  @keyframes fade-in-up {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .msg-in { animation: fade-in-up 0.2s ease-out; }
+
+  .toggle-checkbox:checked {
+    right: 0;
+    border-color: #8ab4f8;
+  }
+  .toggle-checkbox:checked + .toggle-label {
+    background-color: #8ab4f8;
+  }
+</style>
+</head>
+<body class="h-screen w-full overflow-hidden bg-white text-gray-900 dark:bg-gray-900 dark:text-white font-sans">
+
+<div class="flex h-screen w-full">
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar" class="sidebar-transition w-64 flex-shrink-0 h-full bg-gray-50 dark:bg-gray-950 border-r border-gray-200 dark:border-gray-800 flex flex-col overflow-hidden">
+
+    <!-- Logo -->
+    <div class="flex items-center gap-3 px-4 h-16 flex-shrink-0">
+      <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 via-purple-500 to-red-400 flex items-center justify-center flex-shrink-0">
+        <i class="fa-solid fa-bolt text-white text-xs"></i>
+      </div>
+      <span id="sidebar-title" class="fade-item font-medium text-sm whitespace-nowrap overflow-hidden">AI Orchestrator</span>
+    </div>
+
+    <!-- New Session -->
+    <div class="px-3 mb-2">
+      <button id="new-session-btn" title="New Session"
+        class="w-full flex items-center gap-3 justify-center-mini rounded-full bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors px-4 py-2.5">
+        <i class="fa-solid fa-plus text-sm"></i>
+        <span id="new-session-label" class="fade-item text-sm font-medium whitespace-nowrap overflow-hidden">New Session</span>
+      </button>
+    </div>
+
+    <!-- Recent sessions -->
+    <div id="history-wrapper" class="fade-item flex-1 overflow-y-auto px-3 min-h-0">
+      <p class="text-xs font-medium text-gray-500 dark:text-gray-400 px-2 mb-1 mt-2 whitespace-nowrap">Recent</p>
+      <ul id="session-list" class="space-y-0.5">
+        <!-- items injected by JS -->
+      </ul>
+    </div>
+
+    <!-- Bottom actions -->
+    <div class="px-3 pb-3 pt-2 flex flex-col gap-1 border-t border-gray-200 dark:border-gray-800 mt-auto flex-shrink-0">
+      <button id="settings-btn" title="Settings"
+        class="w-full flex items-center gap-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors px-3 py-2.5 justify-center-mini">
+        <i class="fa-solid fa-gear text-sm w-4 text-center"></i>
+        <span class="fade-item text-sm whitespace-nowrap overflow-hidden">Settings</span>
+      </button>
+      <button id="profile-btn" title="Profile"
+        class="w-full flex items-center gap-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors px-3 py-2.5 justify-center-mini">
+        <div class="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
+          <i class="fa-solid fa-user text-[10px] text-white"></i>
+        </div>
+        <span class="fade-item text-sm whitespace-nowrap overflow-hidden">Profile</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- MAIN CHAT AREA -->
+  <main class="flex-1 h-full flex flex-col bg-white dark:bg-gray-900 dark:text-white min-w-0">
+
+    <!-- Header -->
+    <header class="h-16 flex-shrink-0 flex items-center gap-4 px-4 border-b border-gray-200 dark:border-gray-800">
+      <button id="hamburger-btn" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+        <i class="fa-solid fa-bars text-gray-600 dark:text-gray-300"></i>
+      </button>
+      <h1 id="session-name" class="font-medium text-base text-gray-800 dark:text-gray-100">Select or Create a Session</h1>
+    </header>
+
+    <!-- Chat history -->
+    <div id="chat-history" class="flex-1 overflow-y-auto min-h-0">
+      <div class="max-w-3xl mx-auto px-4 py-6 flex flex-col gap-6" id="chat-messages">
+        <!-- Messages injected by JS -->
+      </div>
+    </div>
+
+    <!-- Input area -->
+    <div class="flex-shrink-0 px-4 pb-4 pt-2">
+      <div class="max-w-3xl mx-auto">
+        <div class="flex items-end gap-2 bg-gray-100 dark:bg-gray-800 rounded-3xl px-3 py-2 border border-transparent focus-within:border-blue-400 dark:focus-within:border-blue-500 transition-colors">
+          <textarea id="chat-input" rows="1"
+            class="flex-1 resize-none bg-transparent outline-none text-sm px-2 py-2 max-h-40 placeholder-gray-500 dark:placeholder-gray-400 disabled:opacity-50"
+            placeholder="Message AI Orchestrator..." disabled></textarea>
+          <button id="send-btn"
+            class="w-9 h-9 flex-shrink-0 rounded-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white flex items-center justify-center transition-colors" disabled>
+            <i class="fa-solid fa-arrow-up text-sm"></i>
+          </button>
+        </div>
+        <p id="status-indicator" class="text-center text-xs text-gray-500 dark:text-gray-400 mt-2 h-4">API Connected. Awaiting session.</p>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ===================== MODALS ===================== -->
+
+<!-- New Session Modal -->
+<div id="new-session-modal" class="fixed inset-0 z-50 hidden items-center justify-center">
+  <div class="modal-backdrop absolute inset-0 bg-black/40" data-close="new-session-modal"></div>
+  <div class="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+    <h2 class="text-lg font-semibold mb-4">New Session</h2>
+    <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Session Name</label>
+    <input id="new-session-input" type="text" placeholder="e.g. Project Brainstorming" autocomplete="off"
+      class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-400 dark:focus:border-blue-500 mb-5">
+    <div class="flex justify-end gap-2">
+      <button data-close="new-session-modal" class="px-4 py-2 text-sm rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+      <button id="create-session-btn" class="px-4 py-2 text-sm rounded-full bg-blue-500 hover:bg-blue-600 text-white transition-colors">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div id="settings-modal" class="fixed inset-0 z-50 hidden items-center justify-center">
+  <div class="modal-backdrop absolute inset-0 bg-black/40" data-close="settings-modal"></div>
+  <div class="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+    <h2 class="text-lg font-semibold mb-5">Settings</h2>
+    <div class="flex items-center justify-between py-2">
+      <span class="text-sm">Dark mode</span>
+      <div class="relative inline-block w-10 h-6 select-none">
+        <input type="checkbox" id="theme-toggle" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-300 dark:border-gray-500 appearance-none cursor-pointer transition-all duration-200 top-0.5 left-0.5 checked:left-4 checked:border-blue-400 z-10">
+        <label for="theme-toggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 dark:bg-gray-600 cursor-pointer transition-colors duration-200"></label>
+      </div>
+    </div>
+    <div class="flex justify-end mt-6">
+      <button data-close="settings-modal" class="px-4 py-2 text-sm rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- Profile Modal -->
+<div id="profile-modal" class="fixed inset-0 z-50 hidden items-center justify-center">
+  <div class="modal-backdrop absolute inset-0 bg-black/40" data-close="profile-modal"></div>
+  <div class="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+    <h2 class="text-lg font-semibold mb-4">Profile & API Keys</h2>
+
+    <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Gemini API Key</label>
+    <input type="password" value="Managed in .env file" disabled
+      class="w-full opacity-50 rounded-lg border border-gray-300 dark:border-gray-600 bg-transparent px-3 py-2 text-sm outline-none mb-4 cursor-not-allowed">
+
+    <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Groq API Key</label>
+    <input type="password" value="Managed in .env file" disabled
+      class="w-full opacity-50 rounded-lg border border-gray-300 dark:border-gray-600 bg-transparent px-3 py-2 text-sm outline-none mb-5 cursor-not-allowed">
+
+    <div class="flex justify-end gap-2">
+      <button data-close="profile-modal" class="px-4 py-2 text-sm rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  // ---------- STATE ----------
+  const API_BASE = "http://127.0.0.1:8000";
+  let activeSessionId = null;
+
+  // DOM Elements
+  const sidebar = document.getElementById('sidebar');
+  const sessionList = document.getElementById('session-list');
+  const sessionNameHeader = document.getElementById('session-name');
+  const chatMessages = document.getElementById('chat-messages');
+  const chatHistory = document.getElementById('chat-history');
+  const chatInput = document.getElementById('chat-input');
+  const sendBtn = document.getElementById('send-btn');
+  const statusIndicator = document.getElementById('status-indicator');
+
+  // ---------- API: FETCH SESSIONS ----------
+  async function fetchSessions() {
+    try {
+      const response = await fetch(`${API_BASE}/sessions`);
+      const data = await response.json();
+      renderSessions(data);
+    } catch (error) {
+      console.error("Error fetching sessions:", error);
+      statusIndicator.textContent = "Error: Cannot connect to FastAPI server.";
+      statusIndicator.classList.add("text-red-500");
+    }
+  }
+
+  // ---------- SIDEBAR RENDER ----------
+  function renderSessions(sessions) {
+    sessionList.innerHTML = '';
+    sessions.forEach(s => {
+      const li = document.createElement('li');
+      li.className = `group flex items-center justify-between rounded-lg px-2.5 py-2 cursor-pointer transition-colors ${activeSessionId === s.id ? 'bg-blue-100 dark:bg-gray-800' : 'hover:bg-gray-200 dark:hover:bg-gray-800'}`;
+      
+      const label = document.createElement('span');
+      label.className = `text-sm truncate flex-1 whitespace-nowrap overflow-hidden ${activeSessionId === s.id ? 'font-semibold text-blue-700 dark:text-blue-400' : ''}`;
+      label.textContent = s.session_name;
+      
+      // Load History when clicked!
+      label.addEventListener('click', () => {
+        loadSessionHistory(s.id, s.session_name);
+      });
+
+      const trash = document.createElement('button');
+      trash.className = 'opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-500 ml-2 flex-shrink-0';
+      trash.innerHTML = '<i class="fa-solid fa-trash-can text-xs"></i>';
+      trash.title = 'Delete session';
+      
+      // Delete Session when clicked!
+      trash.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if(confirm(`Are you sure you want to delete "${s.session_name}"?`)) {
+            await deleteSession(s.id);
+        }
+      });
+
+      li.appendChild(label);
+      li.appendChild(trash);
+      sessionList.appendChild(li);
+    });
+  }
+
+  // ---------- API: DELETE SESSION ----------
+  async function deleteSession(id) {
+    try {
+      await fetch(`${API_BASE}/sessions/${id}`, { method: 'DELETE' });
+      
+      // If we deleted the one we are currently looking at, clear the screen
+      if (activeSessionId === id) {
+          activeSessionId = null;
+          sessionNameHeader.textContent = "Select or Create a Session";
+          chatMessages.innerHTML = '';
+          chatInput.disabled = true;
+          sendBtn.disabled = true;
+      }
+      
+      // Refresh the sidebar
+      fetchSessions();
+    } catch (error) {
+      console.error("Error deleting session:", error);
+    }
+  }
+
+  // ---------- API: LOAD HISTORY ----------
+  async function loadSessionHistory(id, name) {
+      activeSessionId = id;
+      sessionNameHeader.textContent = name;
+      chatInput.disabled = false;
+      sendBtn.disabled = false;
+      chatMessages.innerHTML = '';
+      statusIndicator.textContent = "Loading history...";
+      statusIndicator.classList.remove("text-red-500");
+      
+      // Re-render sidebar to update the active blue highlight
+      fetchSessions();
+
+      try {
+          const response = await fetch(`${API_BASE}/history/${id}`);
+          const history = await response.json();
+          
+          history.forEach(msg => {
+              if(msg.role === 'user') {
+                  appendUserMessage(msg.content);
+              } else {
+                  // Attempt to parse if there's a route badge, otherwise default to AI
+                  appendAIMessage(msg.content, "AI"); 
+              }
+          });
+          
+          statusIndicator.textContent = "Ready.";
+      } catch (error) {
+          console.error("Error loading history:", error);
+          statusIndicator.textContent = "Error loading history.";
+      }
+  }
+
+  // ---------- SIDEBAR TOGGLE ----------
+  const hamburgerBtn = document.getElementById('hamburger-btn');
+  let collapsed = false;
+
+  hamburgerBtn.addEventListener('click', () => {
+    collapsed = !collapsed;
+    if (collapsed) {
+      sidebar.classList.remove('w-64');
+      sidebar.classList.add('w-16');
+      document.querySelectorAll('.fade-item').forEach(el => {
+        el.classList.add('hidden');
+      });
+      document.querySelectorAll('#sidebar button, #sidebar .justify-center-mini').forEach(el => {
+        el.classList.add('justify-center');
+      });
+    } else {
+      sidebar.classList.remove('w-16');
+      sidebar.classList.add('w-64');
+      document.querySelectorAll('.fade-item').forEach(el => {
+        el.classList.remove('hidden');
+      });
+    }
+  });
+
+  // ---------- MODAL LOGIC ----------
+  function openModal(id) {
+    const modal = document.getElementById(id);
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    if (id === 'new-session-modal') {
+        setTimeout(() => document.getElementById('new-session-input').focus(), 100);
+    }
+  }
+  function closeModal(id) {
+    const modal = document.getElementById(id);
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+
+  document.getElementById('new-session-btn').addEventListener('click', () => openModal('new-session-modal'));
+  document.getElementById('settings-btn').addEventListener('click', () => openModal('settings-modal'));
+  document.getElementById('profile-btn').addEventListener('click', () => openModal('profile-modal'));
+
+  document.querySelectorAll('[data-close]').forEach(el => {
+    el.addEventListener('click', () => closeModal(el.dataset.close));
+  });
+
+  // ---------- API: CREATE SESSION ----------
+  document.getElementById('create-session-btn').addEventListener('click', async () => {
+    const input = document.getElementById('new-session-input');
+    const name = input.value.trim() || `New Chat`;
+    
+    try {
+        const response = await fetch(`${API_BASE}/sessions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_name: name })
+        });
+        const data = await response.json();
+        
+        // Close modal and clear input
+        closeModal('new-session-modal');
+        input.value = '';
+        
+        // Load the brand new session!
+        await loadSessionHistory(data.session_id, data.session_name);
+        
+    } catch(error) {
+        console.error("Failed to create session:", error);
+        alert("Failed to connect to backend. Is FastAPI running?");
+    }
+  });
+
+  // ---------- THEME ----------
+  const themeToggle = document.getElementById('theme-toggle');
+
+  function applyTheme(isDark) {
+    document.documentElement.classList.toggle('dark', isDark);
+    themeToggle.checked = isDark;
+  }
+
+  const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  applyTheme(prefersDark);
+
+  themeToggle.addEventListener('change', () => {
+    applyTheme(themeToggle.checked);
+  });
+
+  // ---------- CHAT LOGIC ----------
+  function scrollToBottom() {
+    chatHistory.scrollTop = chatHistory.scrollHeight;
+  }
+
+  function appendUserMessage(text) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'flex justify-end msg-in';
+    wrapper.innerHTML = `
+      <div class="max-w-[80%] rounded-2xl rounded-tr-sm bg-blue-500 text-white px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap">${escapeHTML(text)}</div>
+    `;
+    chatMessages.appendChild(wrapper);
+    scrollToBottom();
+  }
+
+  function appendAIMessage(text, model) {
+    const badgeColor = model.toLowerCase() === 'ollama'
+      ? 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300'
+      : 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300';
+      
+    // Don't show badge if model isn't specified
+    const badgeHtml = model && model !== "AI" ? `
+      <div class="flex items-center gap-2 mb-1">
+        <span class="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ${badgeColor}">${model}</span>
+      </div>
+    ` : "";
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'flex justify-start msg-in';
+    wrapper.innerHTML = `
+      <div class="max-w-[80%] w-full overflow-hidden">
+        ${badgeHtml}
+        <div class="rounded-2xl rounded-tl-sm bg-gray-100 dark:bg-gray-800 px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap">${escapeHTML(text)}</div>
+      </div>
+    `;
+    chatMessages.appendChild(wrapper);
+    scrollToBottom();
+  }
+
+  function appendTypingIndicator() {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'flex justify-start msg-in';
+    wrapper.id = 'typing-indicator';
+    wrapper.innerHTML = `
+      <div class="rounded-2xl rounded-tl-sm bg-gray-100 dark:bg-gray-800 px-4 py-3 flex items-center gap-1.5">
+        <span class="typing-dot w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-gray-500"></span>
+        <span class="typing-dot w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-gray-500"></span>
+        <span class="typing-dot w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-gray-500"></span>
+      </div>
+    `;
+    chatMessages.appendChild(wrapper);
+    scrollToBottom();
+  }
+
+  function removeTypingIndicator() {
+    const el = document.getElementById('typing-indicator');
+    if (el) el.remove();
+  }
+
+  function escapeHTML(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // ---------- API: SEND MESSAGE ----------
+  async function sendMessage() {
+    const text = chatInput.value.trim();
+    if (!text) return;
+    
+    if (!activeSessionId) {
+        alert("Please select a session from the sidebar or create a new one first.");
+        return;
+    }
+
+    appendUserMessage(text);
+    chatInput.value = '';
+    chatInput.style.height = 'auto';
+    sendBtn.disabled = true;
+    statusIndicator.textContent = 'AI Orchestrator is thinking...';
+
+    appendTypingIndicator();
+
+    try {
+        const response = await fetch(`${API_BASE}/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: activeSessionId,
+                message: text
+            })
+        });
+        
+        if (!response.ok) throw new Error("Network response was not ok");
+        
+        const data = await response.json();
+        
+        removeTypingIndicator();
+        appendAIMessage(data.response, data.route_used);
+        statusIndicator.textContent = 'Ready.';
+        
+    } catch (error) {
+        console.error("Chat error:", error);
+        removeTypingIndicator();
+        appendAIMessage("Error connecting to backend.", "System");
+        statusIndicator.textContent = "Error.";
+    }
+
+    sendBtn.disabled = false;
+    chatInput.focus();
+  }
+
+  sendBtn.addEventListener('click', sendMessage);
+  chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if(!sendBtn.disabled) sendMessage();
+    }
+  });
+
+  chatInput.addEventListener('input', () => {
+    chatInput.style.height = 'auto';
+    chatInput.style.height = Math.min(chatInput.scrollHeight, 160) + 'px';
+    if (chatInput.value.trim() !== '' && activeSessionId !== null) {
+        sendBtn.disabled = false;
+    } else {
+        sendBtn.disabled = true;
+    }
+  });
+
+  // INITIAL LOAD
+  fetchSessions();
+
+})();
+</script>
+
+</body>
+</html>
