@@ -27,4 +27,4 @@ Thumbs.db
 chroma_data/
 .env
 
-Database/database.sql
+Database/Database.sql
