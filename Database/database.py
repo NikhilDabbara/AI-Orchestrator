@@ -16,12 +16,6 @@
 # import mysql.connector
 
 # # Hardcoded for now. We will move this to a .env file later!
-# credentials = {
-#     "host": "localhost",
-#     "user": "root",
-#     "password": "Nikhil@3869", # REMEMBER to change this to your actual password
-#     "database": "AI_DB"
-# }
 
 # def get_db_connection():
 #     """Establishes and returns a connection to the MySQL database."""
