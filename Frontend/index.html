@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Orchestrator</title>
+<title>OrchAI</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <script>
@@ -57,6 +57,17 @@
   }
   .msg-in { animation: fade-in-up 0.2s ease-out; }
 
+  @keyframes pulse-ring {
+    0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+  }
+  .recording {
+    background-color: #ef4444 !important; /* Tailwind red-500 */
+    color: white !important;
+    animation: pulse-ring 1.2s infinite;
+  }
+
   .toggle-checkbox:checked {
     right: 0;
     border-color: #8ab4f8;
@@ -78,7 +89,7 @@
       <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 via-purple-500 to-red-400 flex items-center justify-center flex-shrink-0">
         <i class="fa-solid fa-bolt text-white text-xs"></i>
       </div>
-      <span id="sidebar-title" class="fade-item font-medium text-sm whitespace-nowrap overflow-hidden">AI Orchestrator</span>
+      <span id="sidebar-title" class="fade-item font-medium text-sm whitespace-nowrap overflow-hidden">OrchAI</span>
     </div>
 
     <!-- New Session -->
@@ -137,6 +148,12 @@
     <div class="flex-shrink-0 px-4 pb-4 pt-2">
       <div class="max-w-3xl mx-auto">
         <div class="flex items-end gap-2 bg-gray-100 dark:bg-gray-800 rounded-3xl px-3 py-2 border border-transparent focus-within:border-blue-400 dark:focus-within:border-blue-500 transition-colors">
+          
+          <button id="mic-btn"
+            class="w-9 h-9 flex-shrink-0 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 flex items-center justify-center transition-all">
+            <i class="fa-solid fa-microphone text-sm"></i>
+          </button>
+
           <textarea id="chat-input" rows="1"
             class="flex-1 resize-none bg-transparent outline-none text-sm px-2 py-2 max-h-40 placeholder-gray-500 dark:placeholder-gray-400 disabled:opacity-50"
             placeholder="Message AI Orchestrator..." disabled></textarea>
@@ -222,6 +239,7 @@
   const chatInput = document.getElementById('chat-input');
   const sendBtn = document.getElementById('send-btn');
   const statusIndicator = document.getElementById('status-indicator');
+  const micBtn = document.getElementById('mic-btn'); // New Mic Button
 
   // ---------- API: FETCH SESSIONS ----------
   async function fetchSessions() {
@@ -506,7 +524,15 @@
             })
         });
         
-        if (!response.ok) throw new Error("Network response was not ok");
+        if (!response.ok) {
+            let errMsg = "Network response was not ok";
+            try {
+                // Try to extract the Python error message we sent from FastAPI
+                const errData = await response.json();
+                if (errData.detail) errMsg = errData.detail;
+            } catch(e) {}
+            throw new Error(errMsg);
+        }
         
         const data = await response.json();
         
@@ -517,7 +543,8 @@
     } catch (error) {
         console.error("Chat error:", error);
         removeTypingIndicator();
-        appendAIMessage("Error connecting to backend.", "System");
+        // Display the actual Python error right in the chat window!
+        appendAIMessage(`System Error: ${error.message}`, "System");
         statusIndicator.textContent = "Error.";
     }
 
@@ -542,6 +569,87 @@
         sendBtn.disabled = true;
     }
   });
+
+  // ---------- SPEECH RECOGNITION ----------
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  
+  if (SpeechRecognition) {
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true; // Keep listening until user stops it
+    recognition.interimResults = true; // Show words in real-time as they speak
+
+    let isRecording = false;
+    let originalPlaceholder = chatInput.placeholder;
+
+    recognition.onstart = () => {
+      isRecording = true;
+      micBtn.classList.add('recording');
+      micBtn.innerHTML = '<i class="fa-solid fa-stop text-sm"></i>';
+      chatInput.placeholder = "Listening...";
+      chatInput.disabled = false;
+    };
+
+    recognition.onresult = (event) => {
+      let finalTranscript = '';
+      let interimTranscript = '';
+      
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+      
+      // Update the textarea with what they are saying
+      // If we have final text, append it. Otherwise show the interim text.
+      if (finalTranscript) {
+          chatInput.value += (chatInput.value ? ' ' : '') + finalTranscript;
+      } else {
+          // Temporarily show what they are saying right now
+          let currentVal = chatInput.value;
+          chatInput.value = currentVal.replace(/ \.\.\.$/, '') + (interimTranscript ? ` ${interimTranscript}...` : '');
+      }
+
+      // Trigger the input event to auto-resize the box and enable the send button
+      chatInput.dispatchEvent(new Event('input'));
+    };
+
+    recognition.onerror = (event) => {
+      console.error("Speech recognition error:", event.error);
+      stopRecording();
+    };
+
+    recognition.onend = () => {
+      stopRecording();
+    };
+
+    function stopRecording() {
+      isRecording = false;
+      micBtn.classList.remove('recording');
+      micBtn.innerHTML = '<i class="fa-solid fa-microphone text-sm"></i>';
+      chatInput.placeholder = originalPlaceholder;
+      chatInput.value = chatInput.value.replace(/ \.\.\.$/, ''); // Clean up interim dots
+    }
+
+    micBtn.addEventListener('click', () => {
+      if (!activeSessionId) {
+          alert("Please select a session from the sidebar or create a new one first.");
+          return;
+      }
+      
+      if (isRecording) {
+        recognition.stop();
+      } else {
+        recognition.start();
+      }
+    });
+
+  } else {
+    // Hide the mic button if the browser doesn't support speech recognition
+    micBtn.style.display = 'none';
+    console.warn("Web Speech API is not supported in this browser.");
+  }
 
   // INITIAL LOAD
   fetchSessions();

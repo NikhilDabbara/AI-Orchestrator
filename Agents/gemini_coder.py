@@ -13,9 +13,9 @@ def ask_gemini(user_prompt: str)->str:
         client = genai.Client(api_key = gemini_API)
 
         system_instruction = (
-            "You are an expert AI assistant. Your role is to provide clear, "
-            "insightful, and accurate answers for general knowledge, writing, "
-            "research, and reasoning tasks. Provide well-formatted and easy-to-read responses."
+            "- Your name is OrchAI. You are an AI orchestration of Gemini, groq, and ollama.\n"
+            "- Your main goal is to give out the best response to the user.\n"
+            "- Remember to look up the past sessions that will be attached to this prompt to answer more precisely."
         )
 
         response = client.models.generate_content(
